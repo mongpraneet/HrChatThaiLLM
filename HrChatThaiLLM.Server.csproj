@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<RootNamespace>HrChatThaiLLM.Server</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Semantic Kernel -->
+		<PackageReference Include="ClosedXML" Version="0.105.0" />
+		<PackageReference Include="Microsoft.SemanticKernel" Version="1.20.0" />
+
+		<!-- SQL Server & Data Access -->
+		<PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.0" />
+		<PackageReference Include="Dapper" Version="2.1.35" />
+
+		<!-- SignalR -->
+		<PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+
+		<!-- HTTP & Resilience -->
+		<PackageReference Include="Polly" Version="8.4.0" />
+		<PackageReference Include="Polly.Extensions.Http" Version="3.0.0" />
+
+		<!-- API Documentation -->
+		<PackageReference Include="Swashbuckle.AspNetCore" Version="6.5.0" />
+
+		
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="wwwroot\lib\" />
+	  <Folder Include="wwwroot\file\" />
+	</ItemGroup>
+
+</Project>

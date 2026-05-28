@@ -1,0 +1,95 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Leave Chart Styles  —  เพิ่มต่อท้าย chat.css
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Chart bubble ────────────────────────────────────────────────────────── */
+.chart-bubble {
+    background: var(--bg-card, #1c2230) !important;
+    border: 1px solid var(--border, #30363d) !important;
+    border-radius: 14px !important;
+    width: min(640px, 100%) !important;
+}
+
+/* ── Title row ───────────────────────────────────────────────────────────── */
+.chart-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.chart-main-title {
+    font-family: 'Kanit', sans-serif;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text, #e6edf3);
+}
+
+/* ── Section label ───────────────────────────────────────────────────────── */
+.chart-section-label {
+    font-size: 0.8rem;
+    color: var(--text-muted, #8b949e);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+}
+
+/* ── Loading indicator ───────────────────────────────────────────────────── */
+.chart-loading {
+    display: flex;
+    align-items: center;
+    padding: 1rem 0;
+}
+
+/* ── Download buttons ────────────────────────────────────────────────────── */
+.chart-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+}
+
+.btn-chart-dl {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border, #30363d);
+    color: var(--text-muted, #8b949e);
+    border-radius: 8px;
+    padding: 0.35rem 0.9rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Sarabun', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.btn-chart-dl:hover {
+    border-color: var(--accent, #1f6feb);
+    color: var(--text, #e6edf3);
+    background: rgba(31, 111, 235, 0.12);
+}
+.btn-chart-dl i {
+    font-size: 0.85rem;
+}
+
+/* ── Quick action button แสดงกราฟ ─────────────────────────────────────────── */
+.quick-btn.chart-btn {
+    border-color: rgba(46, 160, 67, 0.4);
+    color: #2ea043;
+}
+.quick-btn.chart-btn:hover {
+    background: rgba(46, 160, 67, 0.15);
+    border-color: #2ea043;
+    color: var(--text, #e6edf3);
+}
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .chart-bubble {
+        width: 100% !important;
+    }
+    .chart-actions {
+        justify-content: center;
+    }
+}

@@ -1,0 +1,353 @@
+@page
+@model HrChatThaiLLM.Server.Pages.LoginModel
+@{
+    ViewData["Title"] = "เข้าสู่ระบบ HR Chat AI";
+    Layout = null; // Login ไม่ใช้ Layout หลัก
+}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap-5.3.0/css/bootstrap.css" />
+    <link rel="stylesheet" href="~/lib/fontawesome-free-6.7.2-web/css/all.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --brand-dark:    #0d1117;
+            --brand-navy:    #161b22;
+            --brand-card:    #1c2230;
+            --brand-border:  #30363d;
+            --brand-primary: #238636;
+            --brand-accent:  #2ea043;
+            --brand-blue:    #1f6feb;
+            --brand-text:    #e6edf3;
+            --brand-muted:   #8b949e;
+            --brand-input:   #0d1117;
+            --brand-danger:  #f85149;
+            --brand-warning: #e3b341;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: var(--brand-dark);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Animated background */
+        .bg-grid {
+            position: fixed; inset: 0; z-index: 0;
+            background-image:
+                linear-gradient(rgba(35, 134, 54, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(35, 134, 54, 0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: gridMove 20s linear infinite;
+        }
+        
+        /* แก้ไขจุดบกพร่อง Razor ด้วยการหลบเลี่ยง Syntax C# */
+        @Html.Raw("@keyframes gridMove { 0% { transform: translateY(0); } 100% { transform: translateY(40px); } }")
+
+        .bg-glow {
+            position: fixed; inset: 0; z-index: 0;
+            background: radial-gradient(ellipse 60% 50% at 50% 0%, rgba(35,134,54,0.12) 0%, transparent 70%);
+        }
+
+        /* Floating particles */
+        .particle {
+            position: fixed; border-radius: 50%;
+            background: rgba(35, 134, 54, 0.15);
+            animation: float linear infinite;
+            z-index: 0;
+        }
+        
+        @Html.Raw("@keyframes float { 0% { transform: translateY(100vh) rotate(0deg); opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { transform: translateY(-100px) rotate(720deg); opacity: 0; } }")
+
+        /* Login card */
+        .login-wrapper {
+            position: relative; z-index: 10;
+            width: 100%; max-width: 440px;
+            padding: 1rem;
+        }
+
+        .login-card {
+            background: var(--brand-card);
+            border: 1px solid var(--brand-border);
+            border-radius: 16px;
+            padding: 2.5rem 2rem;
+            box-shadow: 0 16px 70px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+            animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+        
+        @Html.Raw("@keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }")
+
+        /* Logo / Brand */
+        .brand-logo {
+            text-align: center; margin-bottom: 2rem;
+        }
+        .brand-icon {
+            width: 72px; height: 72px;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-blue) 100%);
+            border-radius: 20px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 2rem; color: white;
+            box-shadow: 0 8px 30px rgba(35,134,54,0.4);
+            margin-bottom: 1rem;
+            animation: pulse 3s ease-in-out infinite;
+        }
+        
+        @Html.Raw("@keyframes pulse { 0%, 100% { box-shadow: 0 8px 30px rgba(35,134,54,0.4); } 50% { box-shadow: 0 8px 40px rgba(35,134,54,0.7); } }")
+        
+        .brand-title {
+            font-family: 'Kanit', sans-serif;
+            font-size: 1.6rem; font-weight: 600;
+            color: var(--brand-text);
+            line-height: 1.2;
+        }
+        .brand-sub {
+            font-size: 0.85rem; color: var(--brand-muted);
+            margin-top: 0.3rem;
+        }
+
+        /* Form */
+        .form-label {
+            color: var(--brand-muted);
+            font-size: 0.8rem; font-weight: 500;
+            text-transform: uppercase; letter-spacing: 0.08em;
+            margin-bottom: 0.4rem;
+        }
+
+        .input-group {
+            position: relative; margin-bottom: 1.2rem;
+        }
+        .input-icon {
+            position: absolute; left: 14px; top: 50%;
+            transform: translateY(-50%);
+            color: var(--brand-muted); font-size: 0.95rem;
+            z-index: 2; pointer-events: none;
+            transition: color 0.2s;
+        }
+        .form-control {
+            background: var(--brand-input) !important;
+            border: 1px solid var(--brand-border) !important;
+            border-radius: 10px !important;
+            color: var(--brand-text) !important;
+            padding: 0.75rem 1rem 0.75rem 2.8rem !important;
+            font-family: 'Sarabun', sans-serif;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            height: auto !important;
+        }
+        .form-control::placeholder { color: var(--brand-muted); }
+        .form-control:focus {
+            border-color: var(--brand-primary) !important;
+            box-shadow: 0 0 0 3px rgba(35,134,54,0.2) !important;
+            outline: none;
+        }
+        .form-control:focus ~ .input-icon,
+        .input-group:focus-within .input-icon {
+            color: var(--brand-accent);
+        }
+
+        /* Password toggle */
+        .btn-eye {
+            position: absolute; right: 12px; top: 50%;
+            transform: translateY(-50%);
+            background: none; border: none;
+            color: var(--brand-muted); cursor: pointer;
+            z-index: 3; padding: 4px;
+            transition: color 0.2s;
+        }
+        .btn-eye:hover { color: var(--brand-text); }
+
+        /* Submit button */
+        .btn-login {
+            width: 100%;
+            background: linear-gradient(135deg, var(--brand-primary) 0%, #196c2e 100%);
+            border: none; border-radius: 10px;
+            color: white; font-family: 'Kanit', sans-serif;
+            font-size: 1rem; font-weight: 500;
+            padding: 0.8rem;
+            transition: all 0.25s;
+            position: relative; overflow: hidden;
+            cursor: pointer;
+        }
+        .btn-login::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .btn-login:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(35,134,54,0.4); }
+        .btn-login:hover::after { opacity: 1; }
+        .btn-login:active { transform: translateY(0); }
+        .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        /* Alert */
+        .alert-error {
+            background: rgba(248,81,73,0.1);
+            border: 1px solid rgba(248,81,73,0.3);
+            border-radius: 10px;
+            color: #ff7b72;
+            padding: 0.8rem 1rem;
+            font-size: 0.9rem;
+            display: flex; align-items: flex-start; gap: 0.6rem;
+            margin-bottom: 1.2rem;
+            animation: shake 0.4s ease;
+        }
+        
+        @Html.Raw("@keyframes shake { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }")
+
+        /* Divider */
+        .divider {
+            text-align: center; margin: 1.5rem 0 1rem;
+            color: var(--brand-muted); font-size: 0.78rem;
+            letter-spacing: 0.05em;
+        }
+
+        /* Footer note */
+        .login-footer {
+            text-align: center; margin-top: 1.5rem;
+            color: var(--brand-muted); font-size: 0.78rem;
+        }
+        .login-footer a { color: var(--brand-blue); text-decoration: none; }
+        .login-footer a:hover { text-decoration: underline; }
+
+        /* Loading spinner */
+        .spinner-border-sm { width: 1rem; height: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+    <div class="bg-glow"></div>
+
+    <script>
+        for (let i = 0; i < 8; i++) {
+            const p = document.createElement('div');
+            p.className = 'particle';
+            const size = Math.random() * 6 + 4;
+            p.style.cssText = `
+                width:${size}px; height:${size}px;
+                left:${Math.random()*100}%;
+                animation-duration:${Math.random()*15+10}s;
+                animation-delay:-${Math.random()*20}s;
+            `;
+            document.body.appendChild(p);
+        }
+    </script>
+
+    <div class="login-wrapper">
+        <div class="login-card">
+
+            <div class="brand-logo">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-robot"></i>
+                </div>
+                <div class="brand-title">HR Chat AI</div>
+                <div class="brand-sub">ระบบผู้ช่วย HR อัจฉริยะ</div>
+            </div>
+
+            @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+            {
+                <div class="alert-error">
+                    <i class="fa-solid fa-circle-exclamation mt-1"></i>
+                    <span>@Model.ErrorMessage</span>
+                </div>
+            }
+
+            <form method="post" id="loginForm">
+                @Html.AntiForgeryToken()
+
+                <div class="mb-1">
+                    <label class="form-label">รหัสพนักงาน</label>
+                </div>
+                <div class="input-group mb-3">
+                    <i class="fa-solid fa-id-badge input-icon"></i>
+                    <input type="text"
+                           name="EmployeeId"
+                           class="form-control"
+                           placeholder="รหัสพนักงาน"
+                           value="@Model.EmployeeId"
+                           autocomplete="username"
+                           autocapitalize="characters"
+                           maxlength="20"
+                           required
+                           id="empIdInput" />
+                </div>
+
+                <div class="mb-1">
+                    <label class="form-label">รหัสผ่าน</label>
+                </div>
+                <div class="input-group mb-4" style="position:relative;">
+                    <i class="fa-solid fa-lock input-icon"></i>
+                    <input type="password"
+                           name="Password"
+                           class="form-control"
+                           autocomplete="current-password"
+                           id="passwordInput" />
+                    <button type="button" class="btn-eye" id="togglePwd" title="แสดง/ซ่อนรหัสผ่าน">
+                        <i class="fa-solid fa-eye" id="eyeIcon"></i>
+                    </button>
+                </div>
+
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <span id="btnText">
+                        <i class="fa-solid fa-right-to-bracket me-2"></i>เข้าสู่ระบบ
+                    </span>
+                    <span id="btnLoading" style="display:none;">
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        กำลังตรวจสอบ...
+                    </span>
+                </button>
+            </form>
+
+            <div class="login-footer">
+                <i class="fa-solid fa-shield-halved me-1"></i>
+                ระบบมีการเข้ารหัสข้อมูลและความปลอดภัยสูง
+            </div>
+        </div>
+
+        <div class="text-center mt-3" style="color: rgba(255,255,255,0.3); font-size: 0.75rem;">
+            HR Chat AI &copy; @DateTime.Now.Year — Powered by ThaiLLM
+        </div>
+    </div>
+
+    <script>
+        // Toggle password visibility
+        document.getElementById('togglePwd').addEventListener('click', function () {
+            const input = document.getElementById('passwordInput');
+            const icon  = document.getElementById('eyeIcon');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fa-solid fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fa-solid fa-eye';
+            }
+        });
+
+        // Show loading on submit
+        document.getElementById('loginForm').addEventListener('submit', function () {
+            const btn = document.getElementById('loginBtn');
+            document.getElementById('btnText').style.display    = 'none';
+            document.getElementById('btnLoading').style.display = 'inline-flex';
+            btn.disabled = true;
+        });
+
+        // Focus employee id on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const emp = document.getElementById('empIdInput');
+            emp.focus();
+            emp.select();
+        });
+    </script>
+</body>
+</html>

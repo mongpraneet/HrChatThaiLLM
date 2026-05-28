@@ -2,6 +2,7 @@
 using Microsoft.Data.SqlClient;
 using HrChatThaiLLM.Server.Models;
 using System.Collections.Concurrent;
+using System.Text;
 
 namespace HrChatThaiLLM.Server.Services;
 
@@ -10,6 +11,7 @@ public interface IResponseComposer
     Task RefreshCacheAsync();
     string? CheckProfanity(string message, string gender, string employeeName);
     string ComposeResponse(string pluginKey, string bodyContent, string employeeName, string gender);
+    string ComposeSummaryResponse(List<ChatSummaryItem> items, string gender, string employeeName);
 }
 
 public class ResponseComposer : IResponseComposer
@@ -188,6 +190,86 @@ public class ResponseComposer : IResponseComposer
 
             {closing}
             """;
+    }
+
+    // 📋 ฟังก์ชันสำหรับสรุปประวัติการแชท
+    public string ComposeSummaryResponse(List<ChatSummaryItem> items, string gender, string employeeName)
+    {
+        string politeWord = IsFemaleGender(gender) ? "ค่ะ" : "ครับ";
+        string fullNameWithKhun = $"คุณ {employeeName}";
+
+        if (!items.Any())
+        {
+            var greetings = GetGreetingText(politeWord, fullNameWithKhun);
+            return $"""
+                {greetings}
+                
+                ยังไม่มีข้อมูลให้สรุปนะคะ
+                
+                {GetClosingText(politeWord, fullNameWithKhun)}
+                """;
+        }
+
+        var sb = new StringBuilder();
+        sb.AppendLine(GetGreetingText(politeWord, fullNameWithKhun));
+        sb.AppendLine();
+        sb.AppendLine("📋 **สรุปข้อมูลที่ให้บริการในครั้งนี้**");
+        sb.AppendLine();
+
+        foreach (var item in items.OrderBy(i => i.Timestamp))
+        {
+            var countText = item.AskCount > 1 ? $" (ถามซ้ำ {item.AskCount} ครั้ง)" : "";
+            sb.AppendLine($"🔹 **{item.Topic}**{countText}");
+            sb.AppendLine(item.KeyInfo);
+            sb.AppendLine();
+        }
+
+        sb.AppendLine(GetClosingText(politeWord, fullNameWithKhun));
+        return sb.ToString();
+    }
+
+    private string GetGreetingText(string politeWord, string fullNameWithKhun)
+    {
+        // สุ่มคำทักทายจากเทมเพลตถ้ามี หรือใช้ค่าเริ่มต้น
+        if (_templateMap.Values.SelectMany(x => x).Any(t => t.Section == "GREETING"))
+        {
+            var greetings = _templateMap.Values.SelectMany(x => x).Where(t => t.Section == "GREETING").ToList();
+            if (greetings.Count > 0)
+            {
+                var text = greetings[Random.Shared.Next(greetings.Count)].TemplateText;
+                try
+                {
+                    return string.Format(text, politeWord, fullNameWithKhun);
+                }
+                catch
+                {
+                    return text.Replace("{0}", politeWord).Replace("{1}", fullNameWithKhun);
+                }
+            }
+        }
+        return IsFemaleGender(politeWord) ? $"สวัสดีค่ะ {fullNameWithKhun}" : $"สวัสดีครับ {fullNameWithKhun}";
+    }
+
+    private string GetClosingText(string politeWord, string fullNameWithKhun)
+    {
+        // สุ่มคำลงท้ายจากเทมเพลตถ้ามี หรือใช้ค่าเริ่มต้น
+        if (_templateMap.Values.SelectMany(x => x).Any(t => t.Section == "CLOSING"))
+        {
+            var closings = _templateMap.Values.SelectMany(x => x).Where(t => t.Section == "CLOSING").ToList();
+            if (closings.Count > 0)
+            {
+                var text = closings[Random.Shared.Next(closings.Count)].TemplateText;
+                try
+                {
+                    return string.Format(text, politeWord, fullNameWithKhun);
+                }
+                catch
+                {
+                    return text.Replace("{0}", politeWord).Replace("{1}", fullNameWithKhun);
+                }
+            }
+        }
+        return IsFemaleGender(politeWord) ? $"ยินดีที่ได้ช่วยเหลือค่ะ {fullNameWithKhun}" : $"ยินดีที่ได้ช่วยเหลือครับ {fullNameWithKhun}";
     }
 
     private static bool IsFemaleGender(string? gender)

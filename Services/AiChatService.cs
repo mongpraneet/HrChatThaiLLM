@@ -4,6 +4,8 @@ using Microsoft.SemanticKernel;
 using System.Diagnostics;
 using System.Globalization;
 using Microsoft.AspNetCore.Http;
+using HrChatThaiLLM.Server.Models;
+
 public class AiChatService : IAiChatService
 {
     private readonly Kernel _kernel;
@@ -15,6 +17,7 @@ public class AiChatService : IAiChatService
     private readonly IThankYouResponses _thankYouResponses;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AiChatService> _logger;
+    private readonly IChatSummaryService _summaryService;
     private bool _initialized = false;
 
     public AiChatService(
@@ -28,7 +31,8 @@ public class AiChatService : IAiChatService
         IGenderDetectorService genderDetector,
         IOutOfScopeResponseService outOfScopeResponse,
         IThankYouResponses thankYouResponses,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        IChatSummaryService summaryService)
     {
         // IWebHostEnvironment env
         _sql = sqlExecutor;
@@ -39,6 +43,7 @@ public class AiChatService : IAiChatService
         _thankYouResponses = thankYouResponses;
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
+        _summaryService = summaryService;
         _kernel = Kernel.CreateBuilder().Build();
 
         _kernel.Plugins.AddFromObject(new LeavePlugin(_sql), "HrLeave");
@@ -99,6 +104,19 @@ public class AiChatService : IAiChatService
 
         userMessage = DateNormalizer.NormalizeThaiDates(userMessage);
         string matchedPluginKey = DeterminePluginKey(userMessage);
+        
+        // 🔍 ตรวจสอบว่าเป็น Intent "Summary" หรือไม่
+        if (IsSummaryIntent(userMessage))
+        {
+            var sessionId = GetSessionId();
+            var summaryItems = _summaryService.GetSummaryItems(sessionId);
+            var summaryResponse = _composer.ComposeSummaryResponse(summaryItems, effectiveGender, ctx.UserName);
+            
+            stopwatch.Stop();
+            await _chatHistory.SaveAuditLogAsync(userId, userMessage, "Summary", (int)stopwatch.ElapsedMilliseconds);
+            return summaryResponse;
+        }
+
         var bodyData = await RouteToPluginAsync(userId, userMessage);
         var preference = ResolveCurrentPreference();
 
@@ -111,6 +129,13 @@ public class AiChatService : IAiChatService
         }
 
         var dynamicResponse = _composer.ComposeResponse(matchedPluginKey, bodyData, ctx.UserName, effectiveGender);
+
+        // 💾 บันทึก Summary Item หลังจากได้คำตอบ (เฉพาะข้อมูลที่มีประโยชน์)
+        if (!string.IsNullOrEmpty(bodyData) && matchedPluginKey != "OutOfScope")
+        {
+            var sessionId = GetSessionId();
+            SaveSummaryItem(sessionId, matchedPluginKey, userMessage, bodyData);
+        }
 
         stopwatch.Stop();
         await _chatHistory.SaveAuditLogAsync(userId, userMessage, matchedPluginKey, (int)stopwatch.ElapsedMilliseconds);
@@ -465,6 +490,75 @@ public class AiChatService : IAiChatService
         if (msg.ContainsAny(Kw.Positions)) return "HrEmployee (Master-Positions)";
         if (msg.ContainsAny(Kw.Companies)) return "HrEmployee (Master-Companies)";
         return "OutOfScope";
+    }
+
+    // 🔍 ตรวจสอบว่าเป็น Intent "Summary" หรือไม่
+    private static bool IsSummaryIntent(string msg)
+    {
+        if (string.IsNullOrWhiteSpace(msg)) return false;
+        return msg.ContainsAny("สรุป", "ทั้งหมด", "โดยรวม", "สรุปให้หน่อย", "ที่ผ่านมา", "ประวัติการถาม");
+    }
+
+    // 💾 บันทึก Summary Item
+    private void SaveSummaryItem(string sessionId, string pluginKey, string question, string rawData)
+    {
+        var topic = ExtractTopicFromPluginKey(pluginKey, question);
+        var keyInfo = ExtractKeyInfo(rawData);
+
+        var summaryItem = new ChatSummaryItem
+        {
+            Intent = pluginKey,
+            Topic = topic,
+            KeyInfo = keyInfo,
+            Timestamp = DateTime.Now
+        };
+
+        _summaryService.AddOrUpdateSummaryItem(sessionId, summaryItem);
+    }
+
+    // ✂️ แยกข้อมูลสำคัญจาก rawData (ตัดข้อความยาวเกินไป)
+    private string ExtractKeyInfo(string rawData, int maxLength = 500)
+    {
+        if (string.IsNullOrEmpty(rawData)) return "";
+        
+        // ลบช่องว่างเกินและขึ้นต้นบรรทัดใหม่ที่ไม่จำเป็น
+        var cleaned = rawData.Trim();
+        
+        if (cleaned.Length <= maxLength) return cleaned;
+        
+        // ตัดและเพิ่ม "..." เพื่อบอกว่ามีการตัดข้อความ
+        return cleaned.Substring(0, maxLength - 3) + "...";
+    }
+
+    // 🏷️ แปลง PluginKey เป็น Topic ที่เข้าใจง่าย
+    private string ExtractTopicFromPluginKey(string pluginKey, string question)
+    {
+        return pluginKey switch
+        {
+            "HrLeave" => "ยอดวันลาคงเหลือ",
+            "HrMedical" => "สิทธิการเบิกค่ารักษาพยาบาล",
+            "HrAttendance" => "เวลาเข้า-ออกงาน",
+            "HrEmployee" => "ข้อมูลส่วนตัว",
+            "CsvIntent" => "ข้อมูล CSV",
+            "HrMedicalRegulation" => "ระเบียบค่ารักษาพยาบาล",
+            _ => "ข้อมูลที่สอบถาม"
+        };
+    }
+
+    // 🔑 ดึง SessionId จาก HttpContext
+    private string GetSessionId()
+    {
+        var session = _httpContextAccessor.HttpContext?.Session;
+        if (session == null) return "default_session";
+        
+        // ใช้ Session ID หรือสร้างจาก User ID ถ้าไม่มี
+        var sessionId = session.Id;
+        if (string.IsNullOrEmpty(sessionId))
+        {
+            sessionId = "session_" + DateTime.Now.Ticks;
+        }
+        
+        return sessionId;
     }
 }
 

@@ -68,7 +68,8 @@ builder.Services.AddScoped<IGenderDetectorService, GenderDetectorService>();
 builder.Services.AddScoped<IOutOfScopeResponseService, OutOfScopeResponseService>();
 builder.Services.AddScoped<IThankYouResponses, ThankYouResponses>();
 builder.Services.AddSingleton<IPromptChoiceRouter, PromptChoiceRouter>();
-
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IChatSummaryService, ChatSummaryService>();
 
 // ========================================
 // 🏗️ 2. Build Application

@@ -1,9 +1,10 @@
+using HrChatThaiLLM.Server.Models;
 using HrChatThaiLLM.Server.Services;
 using HrChatThaiLLM.Server.Services.Plugins;
+using Microsoft.AspNetCore.Http;
 using Microsoft.SemanticKernel;
 using System.Diagnostics;
 using System.Globalization;
-using Microsoft.AspNetCore.Http;
 public class AiChatService : IAiChatService
 {
     private readonly Kernel _kernel;
@@ -15,6 +16,7 @@ public class AiChatService : IAiChatService
     private readonly IThankYouResponses _thankYouResponses;
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ILogger<AiChatService> _logger;
+    private readonly IChatSummaryService _summaryService;
     private bool _initialized = false;
 
     public AiChatService(
@@ -28,6 +30,7 @@ public class AiChatService : IAiChatService
         IGenderDetectorService genderDetector,
         IOutOfScopeResponseService outOfScopeResponse,
         IThankYouResponses thankYouResponses,
+        IChatSummaryService summaryService,
         IHttpContextAccessor httpContextAccessor)
     {
         // IWebHostEnvironment env
@@ -40,6 +43,7 @@ public class AiChatService : IAiChatService
         _httpContextAccessor = httpContextAccessor;
         _logger = logger;
         _kernel = Kernel.CreateBuilder().Build();
+        _summaryService = summaryService;
 
         _kernel.Plugins.AddFromObject(new LeavePlugin(_sql), "HrLeave");
         _kernel.Plugins.AddFromObject(
@@ -79,7 +83,7 @@ public class AiChatService : IAiChatService
         var ctx = await GetUserContextAsync(userId);
         var effectiveGender = ResolveEffectiveGender(ctx.Gender);
 
-        // 1. ตรวจสอบสิทธิ์และตรวจสอบคำหยาบก่อน (Profanity Interception)
+        // 1. ตรวจสอบคำหยาบ
         var profanityWarning = _composer.CheckProfanity(userMessage, effectiveGender, ctx.UserName);
         if (profanityWarning != null)
         {
@@ -88,6 +92,7 @@ public class AiChatService : IAiChatService
             return profanityWarning;
         }
 
+        // 2. ตรวจสอบคำขอบคุณ
         if (IsThankYouMessage(userMessage))
         {
             var pref = ResolveCurrentPreference();
@@ -95,27 +100,44 @@ public class AiChatService : IAiChatService
             stopwatch.Stop();
             await _chatHistory.SaveAuditLogAsync(userId, userMessage, "ThankYouIntent", (int)stopwatch.ElapsedMilliseconds);
             return response;
-        }      
+        }
 
+        // 3. Normalize และ หา Plugin Key
         userMessage = DateNormalizer.NormalizeThaiDates(userMessage);
         string matchedPluginKey = DeterminePluginKey(userMessage);
-        var bodyData = await RouteToPluginAsync(userId, userMessage);
-        var preference = ResolveCurrentPreference();
 
+        // 🔴 กรณีเป็น Summary ให้ดึงข้อมูลมาแสดงทันที (ไม่ต้องวิ่ง Plugin)
+        if (matchedPluginKey == "Summary")
+        {
+            var summaryItems = _summaryService.GetSummaryItems(userId);
+            stopwatch.Stop();
+            await _chatHistory.SaveAuditLogAsync(userId, userMessage, "Summary", (int)stopwatch.ElapsedMilliseconds);
+            return _composer.ComposeSummaryResponse(summaryItems, effectiveGender, ctx.UserName);
+        }
+
+        // 4. วิ่ง Plugin เพื่อเอาข้อมูล
+        var bodyData = await RouteToPluginAsync(userId, userMessage);
+
+        // 🔴 จุดสำคัญ: บันทึกข้อมูลลง Summary ทันทีที่ได้ข้อมูล (ถ้าไม่ใช่ OutOfScope)
+        if (matchedPluginKey != "OutOfScope" && !string.IsNullOrEmpty(bodyData))
+        {
+            SaveSummaryItem(userId, matchedPluginKey, userMessage, bodyData);
+        }
+
+        // จัดการกรณีทักทาย
         if (matchedPluginKey == "OutOfScope" && HasGreeting(userMessage))
         {
-            var greet = preference is GenderPreference.Female or GenderPreference.LGBT
-                ? "สวัสดีค่ะ 👋"
-                : "สวัสดีครับ 👋";
+            var pref = ResolveCurrentPreference();
+            var greet = pref is GenderPreference.Female or GenderPreference.LGBT ? "สวัสดีค่ะ 👋" : "สวัสดีครับ 👋";
             bodyData = $"{greet}\n\n{bodyData}";
         }
 
-        var dynamicResponse = _composer.ComposeResponse(matchedPluginKey, bodyData, ctx.UserName, effectiveGender);
+        var finalResponse = _composer.ComposeResponse(matchedPluginKey, bodyData, ctx.UserName, effectiveGender);
 
         stopwatch.Stop();
         await _chatHistory.SaveAuditLogAsync(userId, userMessage, matchedPluginKey, (int)stopwatch.ElapsedMilliseconds);
 
-        return dynamicResponse;
+        return finalResponse;
     }
 
     private void UpdateGenderPreferenceInSession(string userMessage)
@@ -168,6 +190,7 @@ public class AiChatService : IAiChatService
     private static string DeterminePluginKey(string msg)
     {
         if (IsSystemIdentityQuestion(msg)) return "AssistantIdentity";
+        if (msg.ContainsAny(Kw.Summary)) return "Summary";
         if (msg.ContainsAny(Kw.IntentCsv)) return "CsvIntent";
         if (msg.ContainsAny(Kw.MedicalRegulation)) return "HrMedicalRegulation";
         if (msg.ContainsAny(Kw.Attendance)) return "HrAttendance";
@@ -465,6 +488,52 @@ public class AiChatService : IAiChatService
         if (msg.ContainsAny(Kw.Positions)) return "HrEmployee (Master-Positions)";
         if (msg.ContainsAny(Kw.Companies)) return "HrEmployee (Master-Companies)";
         return "OutOfScope";
+    }
+
+    // ในเมธอดที่ประมวลผลคำตอบ (หลังจากได้ข้อมูลจาก Plugin แล้ว)
+    private void SaveSummaryItem(string sessionId, string pluginKey, string question, string rawData)
+    {
+        var summaryItem = new ChatSummaryItem
+        {
+            Intent = pluginKey, // ใช้ PluginKey เป็น Intent หลัก
+            Topic = ExtractTopicFromPluginKey(pluginKey),
+            KeyInfo = ExtractKeyInfo(rawData),
+            Timestamp = DateTime.Now
+        };
+
+        _summaryService.AddOrUpdateSummaryItem(sessionId, summaryItem);
+        _logger.LogDebug("Saved summary for intent: {Intent}, topic: {Topic}", pluginKey, summaryItem.Topic);
+    }
+    // ฟังก์ชันช่วยย่อย (ใส่ไว้ในคลาสเดิมของคุณได้เลย)
+    private string ExtractKeyInfo(string rawData)
+    {
+        if (string.IsNullOrEmpty(rawData)) return "";
+        return rawData; // หรือใส่ Logic ตัดข้อความให้สั้นลงที่นี่
+    }
+    private string ExtractTopicFromPluginKey(string pluginKey)
+    {
+        return pluginKey switch
+        {
+            "HrLeave" => "ยอดวันลาและประวัติการลา",
+            "HrMedical" => "สิทธิการเบิกค่ารักษาพยาบาล",
+            "HrAttendance" => "เวลาเข้า-ออกงาน",
+            "HrEmployee" => "ข้อมูลส่วนตัวพนักงาน",
+            "HrMedicalRegulation" => "ระเบียบค่ารักษาพยาบาล",
+            "CsvIntent" => "ข้อมูลทั่วไปบริษัท",
+            _ => "ข้อมูลที่สอบถาม"
+        };
+    }
+
+    private string ExtractTopicFromIntent(string intent, string question)
+    {
+        return intent switch
+        {
+            "LeaveBalance" => "ยอดวันลาคงเหลือ",
+            "MedicalClaim" => "สิทธิการเบิกค่ารักษาพยาบาล",
+            "Attendance" => "เวลาเข้า-ออกงาน",
+            "MyProfile" => "ข้อมูลส่วนตัว",
+            _ => "ข้อมูลที่สอบถาม"
+        };
     }
 }
 

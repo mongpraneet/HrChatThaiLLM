@@ -1,0 +1,16 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - HR Chat AI</title>
+    <link rel="stylesheet" href="~/css/chat.css" />
+    @await RenderSectionAsync("Head", required: false)
+</head>
+<body>
+    @RenderBody()
+    <script src="~/js/microsoft-signalr9.0.6.min.js"></script>
+    <script src="~/js/chat.js"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

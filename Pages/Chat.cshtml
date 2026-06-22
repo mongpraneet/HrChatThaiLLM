@@ -1,0 +1,773 @@
+@page
+@model HrChatThaiLLM.Server.Pages.ChatModel
+@{
+    ViewData["Title"] = "HR Data Intelligence";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>@ViewData["Title"]</title>
+
+    <link rel="stylesheet" href="~/lib/bootstrap-5.3.0/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/lib/fontawesome-free-6.7.2-web/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="~/css/chart-addon.css" asp-append-version="true" />
+
+    <style>
+        :root {
+            --bg-base:     #0d1117;
+            --bg-sidebar:  #161b22;
+            --bg-chat:     #0d1117;
+            --bg-card:     #1c2230;
+            --bg-input:    #161b22;
+            --border:      #30363d;
+            --primary:     #238636;
+            --primary-lt:  #2ea043;
+            --accent:      #1f6feb;
+            --text:        #e6edf3;
+            --text-muted:  #8b949e;
+            --text-dim:    #6e7681;
+            --user-msg:    #1f6feb;
+            --ai-msg:      #1c2230;
+            --danger:      #f85149;
+            --sidebar-w:   280px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html, body {
+            height: 100%; overflow: hidden;
+            font-family: 'Sarabun', sans-serif;
+            background: var(--bg-base);
+            color: var(--text);
+        }
+
+        /* ── Layout ─────────────────────────────────────────── */
+        .app-layout {
+            display: flex; height: 100vh; height: 100dvh; overflow: hidden;
+        }
+
+        /* ── Sidebar ─────────────────────────────────────────── */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex; flex-direction: column;
+            flex-shrink: 0; overflow: hidden;
+            transition: width 0.3s ease;
+        }
+        .sidebar.collapsed { width: 0; }
+
+        .sidebar-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .brand {
+            display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.8rem;
+        }
+        .brand-icon {
+            width: 36px; height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem; color: white; flex-shrink: 0;
+        }
+        .brand-name {
+            font-family: 'Kanit', sans-serif;
+            font-size: 1rem; font-weight: 600; color: var(--text);
+        }
+        .brand-ver { font-size: 0.7rem; color: var(--text-muted); }
+
+        /* New Chat Button */
+        .btn-new-chat {
+            width: 100%;
+            background: rgba(35,134,54,0.15);
+            border: 1px solid rgba(35,134,54,0.4);
+            color: var(--primary-lt);
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            font-size: 0.9rem; font-family: 'Sarabun', sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex; align-items: center; gap: 0.5rem;
+        }
+        .btn-new-chat:hover {
+            background: rgba(35,134,54,0.25);
+            border-color: var(--primary);
+        }
+
+        /* Employee Card */
+        .emp-card {
+            margin: 0.8rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.8rem;
+        }
+        .emp-avatar {
+            width: 38px; height: 38px;
+            background: linear-gradient(135deg, var(--accent), var(--primary));
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1rem; color: white; flex-shrink: 0;
+        }
+        .emp-name {
+            font-weight: 600; font-size: 0.9rem; color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .emp-id   { font-size: 0.75rem; color: var(--text-muted); }
+        .emp-dept { font-size: 0.75rem; color: var(--text-dim); margin-top: 0.4rem; }
+        .emp-pos  { font-size: 0.75rem; color: var(--text-dim); }
+
+        /* Chat History */
+        .sidebar-section-title {
+            padding: 0.6rem 1rem 0.3rem;
+            font-size: 0.72rem; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-muted);
+            font-weight: 600; flex-shrink: 0;
+        }
+        .session-list {
+            flex: 1; overflow-y: auto; padding: 0 0.5rem 0.5rem;
+        }
+        .session-list::-webkit-scrollbar { width: 4px; }
+        .session-list::-webkit-scrollbar-track { background: transparent; }
+        .session-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        .session-item {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px; cursor: pointer;
+            transition: background 0.15s;
+            position: relative; group: true;
+        }
+        .session-item:hover    { background: rgba(255,255,255,0.05); }
+        .session-item.active   { background: rgba(31,111,235,0.15); border: 1px solid rgba(31,111,235,0.3); }
+        .session-icon          { color: var(--text-dim); font-size: 0.85rem; flex-shrink: 0; }
+        .session-item.active .session-icon { color: var(--accent); }
+        .session-text          { flex: 1; min-width: 0; }
+        .session-title {
+            font-size: 0.85rem; color: var(--text);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .session-date  { font-size: 0.72rem; color: var(--text-dim); }
+        .session-del {
+            display: none; background: none; border: none;
+            color: var(--danger); padding: 2px 6px; border-radius: 4px;
+            font-size: 0.8rem; cursor: pointer; flex-shrink: 0;
+            transition: background 0.15s;
+        }
+        .session-item:hover .session-del { display: block; }
+        .session-del:hover { background: rgba(248,81,73,0.15); }
+
+        /* Sidebar Footer */
+        .sidebar-footer {
+            padding: 0.8rem; border-top: 1px solid var(--border); flex-shrink: 0;
+        }
+        .btn-logout {
+            width: 100%; background: none;
+            border: 1px solid var(--border); border-radius: 8px;
+            color: var(--text-muted); font-size: 0.85rem;
+            padding: 0.5rem; cursor: pointer;
+            transition: all 0.2s; font-family: 'Sarabun', sans-serif;
+            display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+        }
+        .btn-logout:hover { border-color: var(--danger); color: var(--danger); background: rgba(248,81,73,0.08); }
+
+        /* ── Main Chat Area ───────────────────────────────────── */
+        .chat-main {
+            flex: 1; display: flex; flex-direction: column; overflow: hidden;
+            min-width: 0;
+        }
+
+        /* Chat Header */
+        .chat-header {
+            padding: 0.8rem 1.2rem;
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 0.8rem;
+            flex-shrink: 0;
+            background: var(--bg-chat);
+        }
+        .btn-toggle-sidebar {
+            background: none; border: none; color: var(--text-muted);
+            font-size: 1.1rem; cursor: pointer; padding: 4px 8px;
+            border-radius: 6px; transition: all 0.2s;
+        }
+        .btn-toggle-sidebar:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+        .chat-title { font-family: 'Kanit', sans-serif; font-size: 1rem; font-weight: 500; }
+        .chat-status { font-size: 0.8rem; color: var(--text-muted); }
+        
+        <text>
+        .status-dot {
+            display: inline-block; width: 8px; height: 8px;
+            border-radius: 50%; background: var(--primary);
+            margin-right: 0.3rem; animation: blink 2s ease-in-out infinite;
+        }
+        </text>
+
+        @Html.Raw("@keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.3;} }")
+
+        /* Messages area */
+        .chat-messages {
+            flex: 1; overflow-y: auto; padding: 1.5rem;
+            display: flex; flex-direction: column; gap: 1.2rem;
+            background: var(--bg-chat);
+        }
+        .chat-messages::-webkit-scrollbar { width: 6px; }
+        .chat-messages::-webkit-scrollbar-track { background: transparent; }
+        .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+        /* Message bubble */
+        <text>
+        .msg-wrap {
+            display: flex; flex-direction: column;
+            animation: msgIn 0.35s cubic-bezier(0.16,1,0.3,1) both;
+        }
+        </text>
+
+        @Html.Raw("@keyframes msgIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }")
+        
+        .msg-wrap.user  { align-items: flex-end; }
+        .msg-wrap.ai    { align-items: flex-start; }
+
+        .msg-header {
+            display: flex; align-items: center; gap: 0.5rem;
+            margin-bottom: 0.35rem; padding: 0 0.2rem;
+        }
+        .msg-avatar {
+            width: 28px; height: 28px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 0.8rem; flex-shrink: 0;
+        }
+        .msg-avatar.ai-av   { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; }
+        .msg-avatar.user-av { background: linear-gradient(135deg, var(--accent), #3d8ef8); color: white; }
+        .msg-sender { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
+        .msg-time   { font-size: 0.7rem; color: var(--text-dim); margin-left: auto; }
+
+        /* ป้องกันความสับสนเรื่องเครื่องหมายวงเล็บด้วยแท็ก text */
+        <text>
+        .msg-bubble {
+            max-width: min(620px, 85%);
+            padding: 0.75rem 1rem;
+            border-radius: 14px;
+            font-size: 0.95rem; line-height: 1.65;
+        }
+        </text>
+        
+        .msg-wrap.ai   .msg-bubble {
+            background: var(--ai-msg);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+            color: var(--text);
+        }
+        .msg-wrap.user .msg-bubble {
+            background: var(--user-msg);
+            border-bottom-right-radius: 4px;
+            color: white;
+        }
+
+        /* ── Inline code ใน bubble ของ AI: อ่านง่าย ตัวใหญ่ สีชัด ── */
+        .msg-wrap.ai .msg-bubble code {
+            display: inline-block;
+            background: rgba(99, 179, 237, 0.15);
+            color: #63b3ed;
+            border: 1px solid rgba(99, 179, 237, 0.35);
+            border-radius: 5px;
+            padding: 0.1em 0.45em;
+            font-family: 'Sarabun', 'Segoe UI', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            line-height: 1.5;
+        }
+        /* code ใน bubble ของ user (สีขาวบนน้ำเงิน) */
+        .msg-wrap.user .msg-bubble code {
+            background: rgba(255,255,255,0.18);
+            color: #ffffff;
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 5px;
+            padding: 0.1em 0.45em;
+            font-family: 'Sarabun', 'Segoe UI', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        /* Welcome message */
+        .welcome-card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 16px; padding: 1.5rem; max-width: 500px;
+            margin: 0 auto; text-align: center;
+        }
+        .welcome-icon { font-size: 2.5rem; margin-bottom: 0.8rem; }
+        .welcome-title {
+            font-family: 'Kanit', sans-serif; font-size: 1.2rem; font-weight: 600;
+            color: var(--text); margin-bottom: 0.5rem;
+        }
+        .welcome-sub { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem; }
+        .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; text-align: left; }
+        .feature-item {
+            background: rgba(255,255,255,0.04); border-radius: 8px; padding: 0.6rem 0.8rem;
+            font-size: 0.82rem; color: var(--text-muted);
+            display: flex; align-items: center; gap: 0.5rem; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .feature-item:hover { background: rgba(31,111,235,0.12); color: var(--text); }
+        .feature-item i { color: var(--primary-lt); font-size: 0.9rem; }
+
+        /* Typing indicator */
+        .typing-bubble {
+            background: var(--ai-msg); border: 1px solid var(--border);
+            border-radius: 14px; border-bottom-left-radius: 4px;
+            padding: 0.75rem 1rem; display: flex; align-items: center; gap: 4px;
+        }
+        .typing-text {
+            margin-left: 0.4rem;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+        }
+        
+        <text>
+        .typing-dot {
+            width: 7px; height: 7px; border-radius: 50%;
+            background: var(--text-muted);
+            animation: typingBounce 1.4s ease-in-out infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        </text>
+
+        @Html.Raw("@keyframes typingBounce { 0%,80%,100% { transform: scale(0.6); opacity: 0.5; } 40% { transform: scale(1); opacity: 1; } }")
+
+        /* Quick Actions */
+        .quick-actions {
+            padding: 0.6rem 1.2rem;
+            background: var(--bg-chat);
+            border-top: 1px solid var(--border);
+            display: flex; flex-wrap: wrap; gap: 0.4rem;
+            flex-shrink: 0;
+        }
+        .quick-btn {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid var(--border);
+            color: var(--text-muted); border-radius: 20px;
+            padding: 0.3rem 0.8rem; font-size: 0.8rem;
+            cursor: pointer; transition: all 0.2s;
+            white-space: nowrap; font-family: 'Sarabun', sans-serif;
+            display: flex; align-items: center; gap: 0.3rem;
+        }
+        .quick-btn:hover { background: rgba(31,111,235,0.15); border-color: var(--accent); color: var(--text); }
+
+        /* Input Area */
+        .chat-input-wrap {
+            padding: 0.8rem 1.2rem 1rem;
+            background: var(--bg-chat);
+            flex-shrink: 0;
+        }
+        .input-box {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            display: flex; align-items: flex-end; gap: 0.6rem;
+            padding: 0.5rem 0.6rem 0.5rem 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-box:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(31,111,235,0.15);
+        }
+        #messageInput {
+            flex: 1; background: none; border: none; outline: none;
+            color: var(--text); font-family: 'Sarabun', sans-serif;
+            font-size: 0.95rem; resize: none; min-height: 24px; max-height: 150px;
+            padding: 4px 0;
+            overflow-y: auto;
+        }
+        #messageInput::placeholder { color: var(--text-dim); }
+        .btn-send {
+            width: 36px; height: 36px;
+            background: var(--accent); border: none; border-radius: 8px;
+            color: white; cursor: pointer; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s; font-size: 0.9rem;
+        }
+        .btn-send:hover:not(:disabled) { background: #388bfd; transform: scale(1.05); }
+        .btn-send:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; }
+        .btn-send.voice-mode {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+        }
+        .btn-send.voice-mode:hover {
+            background: rgba(255,255,255,0.06);
+            color: var(--text);
+            transform: none;
+        }
+        .btn-send.recording {
+            background: var(--danger);
+            border-color: rgba(248,81,73,0.7);
+            color: #fff;
+        }
+        .voice-panel {
+            display: none;
+            margin-top: 0.6rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            text-align: center;
+        }
+        .voice-panel.active { display: block; }
+        .voice-panel-text {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin-bottom: 0.8rem;
+        }
+        /* ── Hold-to-Talk Button ── */
+        .voice-dot-ring {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            border-radius: 50%;
+            border: 8px solid rgba(255, 53, 92, 0.25);
+            display: grid;
+            place-items: center;
+            cursor: pointer;
+            position: relative;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        border-color 0.2s ease,
+                        box-shadow 0.2s ease;
+        }
+        .voice-dot-ring.recording {
+            transform: scale(1.12);
+            border-color: rgba(238, 82, 83, 0.75);
+            animation: vd-ring-pulse 1.2s cubic-bezier(0.66, 0, 0, 1) infinite;
+        }
+        .voice-dot-ring.recording::before,
+        .voice-dot-ring.recording::after {
+            content: '';
+            position: absolute;
+            inset: -14px;
+            border-radius: 50%;
+            border: 2px solid rgba(238, 82, 83, 0.45);
+            animation: vd-ripple 1.6s ease-out infinite;
+            pointer-events: none;
+        }
+        .voice-dot-ring.recording::after {
+            inset: -28px;
+            border-color: rgba(238, 82, 83, 0.22);
+            animation-delay: 0.55s;
+        }
+        .voice-dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #ff355c;
+            pointer-events: none;
+            transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        box-shadow 0.2s ease;
+        }
+        .voice-dot-ring.recording .voice-dot {
+            transform: scale(1.6);
+            box-shadow: 0 0 12px rgba(255, 53, 92, 0.7);
+        }
+        /* Sound wave bars */
+        .voice-wave-bars {
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            gap: 4px;
+            height: 32px;
+            margin-top: 12px;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        .voice-wave-bars.active { opacity: 1; }
+        .voice-bar {
+            width: 4px;
+            border-radius: 2px;
+            background: #ff355c;
+            height: 4px;
+            transform-origin: bottom center;
+        }
+        .voice-wave-bars.active .voice-bar {
+            animation: vd-bar 0.6s ease-in-out infinite alternate;
+        }
+        .voice-wave-bars.active .voice-bar:nth-child(1) { animation-delay: 0s;    --h: 10px; }
+        .voice-wave-bars.active .voice-bar:nth-child(2) { animation-delay: 0.12s; --h: 22px; }
+        .voice-wave-bars.active .voice-bar:nth-child(3) { animation-delay: 0.06s; --h: 30px; }
+        .voice-wave-bars.active .voice-bar:nth-child(4) { animation-delay: 0.18s; --h: 18px; }
+        .voice-wave-bars.active .voice-bar:nth-child(5) { animation-delay: 0.09s; --h: 12px; }
+        /* Status label */
+        .voice-status-label {
+            font-size: 0.78rem;
+            margin-top: 8px;
+            color: rgba(255, 53, 92, 0.85);
+            letter-spacing: 0.05em;
+            opacity: 0;
+            transform: translateY(4px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .voice-status-label.visible { opacity: 1; transform: translateY(0); }
+        /* Keyframes */
+        @@keyframes vd-ring-pulse {
+            0%   { box-shadow: 0 0 0 0    rgba(238,82,83,0.55), 0 0 20px rgba(238,82,83,0.2); }
+            60%  { box-shadow: 0 0 0 16px rgba(238,82,83,0),    0 0 20px rgba(238,82,83,0.2); }
+            100% { box-shadow: 0 0 0 0    rgba(238,82,83,0),    0 0 20px rgba(238,82,83,0.2); }
+        }
+        @@keyframes vd-ripple {
+            0%   { transform: scale(0.85); opacity: 0.7; }
+            100% { transform: scale(1.15); opacity: 0; }
+        }
+        @@keyframes vd-bar {
+            from { height: 4px; }
+            to   { height: var(--h, 20px); }
+        }
+        .voice-cancel {
+            position: absolute;
+            right: 1.1rem;
+            margin-top: -0.2rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.4rem;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .voice-cancel:hover { color: var(--text); }
+        .input-hint {
+            text-align: center; margin-top: 0.4rem;
+            font-size: 0.72rem; color: var(--text-dim);
+        }
+
+        /* Toast */
+        .toast-box {
+            position: fixed; bottom: 1.5rem; right: 1.5rem;
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 10px; padding: 0.7rem 1rem;
+            color: var(--text); font-size: 0.85rem;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+            transform: translateX(200%); transition: transform 0.3s ease;
+            z-index: 9999; display: flex; align-items: center; gap: 0.5rem;
+        }
+        .toast-box.show { transform: translateX(0); }
+        .toast-box.success { border-color: rgba(46,160,67,0.5); }
+        .toast-box.error   { border-color: rgba(248,81,73,0.5); }
+
+        /* Connection badge */
+        .conn-badge {
+            font-size: 0.72rem; padding: 0.2rem 0.6rem;
+            border-radius: 20px;
+            background: rgba(35,134,54,0.15); color: var(--primary-lt);
+            border: 1px solid rgba(35,134,54,0.3);
+        }
+        .conn-badge.disconnected { background: rgba(248,81,73,0.1); color: var(--danger); border-color: rgba(248,81,73,0.3); }
+
+        /* Mobile */
+        @Html.Raw("@media(max-width: 768px) { .sidebar { position: fixed; z-index: 100; height: 100%; left: 0; top: 0; } .sidebar.collapsed { left: -100%; } .feature-grid { grid-template-columns: 1fr; } .chat-main { min-height: 0; } .chat-messages { padding-bottom: 0.8rem; } .quick-actions { padding-bottom: 0.6rem; } .chat-input-wrap { position: sticky; bottom: 0; z-index: 15; padding-bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px) + 8px); background: var(--bg-chat); border-top: 1px solid var(--border); } .session-del { display: inline-flex; align-items: center; justify-content: center; } .session-item .session-del { opacity: 0.9; } }")
+    </style>
+</head>
+<body>
+<div class="app-layout">
+
+    <aside class="sidebar" id="sidebar">
+
+        <div class="sidebar-header">
+            <div class="brand">
+                <div class="brand-icon"><i class="fa-solid fa-robot"></i></div>
+                <div>
+                    <div class="brand-name">HR Data Intelligence</div>
+                    <div class="brand-ver">Powered by RCI IT</div>
+                </div>
+            </div>
+            <button class="btn-new-chat" id="btnNewChat">
+                <i class="fa-solid fa-plus"></i>
+                <span>สร้างแชทใหม่</span>
+            </button>
+        </div>
+
+        <div class="emp-card">
+            <div class="d-flex align-items-center gap-2 mb-2">
+                <div class="emp-avatar"><i class="fa-solid fa-user"></i></div>
+                <div style="min-width:0">
+                    <div class="emp-name">@Model.EmployeeName</div>
+                    <div class="emp-id">รหัส: @Model.EmployeeId</div>
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.DeptName))
+            {
+                <div class="emp-dept"><i class="fa-solid fa-building me-1"></i>@Model.DeptName</div>
+            }
+            @if (!string.IsNullOrEmpty(Model.PositionName))
+            {
+                <div class="emp-pos"><i class="fa-solid fa-briefcase me-1"></i>@Model.PositionName</div>
+            }
+        </div>
+
+        <div class="sidebar-section-title">ประวัติการแชท</div>
+        <div class="session-list" id="sessionList">
+            @foreach (var session in Model.RecentSessions)
+            {
+                var isActive = session.SessionId == Model.CurrentSessionId;
+                <div class="session-item @(isActive ? "active" : "")"
+                     data-session-id="@session.SessionId"
+                     onclick="loadSession('@session.SessionId')">
+                    <i class="fa-regular fa-message session-icon"></i>
+                    <div class="session-text">
+                        <div class="session-title">@session.SessionTitle</div>
+                        <div class="session-date">@session.UpdatedAt.ToString("dd/MM/yy HH:mm")</div>
+                    </div>
+                    <button class="session-del" onclick="deleteSession(event,'@session.SessionId')" title="ลบ">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            }
+            @if (!Model.RecentSessions.Any())
+            {
+                <div style="padding:1rem; text-align:center; color:var(--text-dim); font-size:0.8rem;">
+                    ยังไม่มีประวัติการแชท
+                </div>
+            }
+        </div>
+
+        <div class="sidebar-footer">
+            <form method="post" asp-page-handler="Logout" style="margin:0">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn-logout">
+                    <i class="fa-solid fa-right-from-bracket"></i>ออกจากระบบ
+                </button>
+            </form>
+        </div>
+    </aside>
+
+    <div class="chat-main">
+
+        <div class="chat-header">
+            <button class="btn-toggle-sidebar" id="btnToggleSidebar" title="เปิด/ปิดเมนู">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+            <div style="flex:1">
+                <div class="chat-title" id="currentSessionTitle">HR Data Intelligence</div>
+                <div class="chat-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">กำลังเชื่อมต่อ...</span>
+                </div>
+            </div>
+            <span class="conn-badge disconnected" id="connBadge">⬤ ออฟไลน์</span>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div id="welcomeCard" style="display:flex; justify-content:center; padding-top: 2rem;">
+                <div class="welcome-card">
+                    <div class="welcome-icon">🤖</div>
+                    <div class="welcome-title">สวัสดีครับ คุณ @Model.EmployeeName</div>
+                    <div class="welcome-sub">ผมพร้อมช่วยตอบคำถามด้าน HR ทุกเรื่อง</div>
+                    <div class="feature-grid">
+                        <div class="feature-item" onclick="quickAsk('วันลาเหลือเท่าไหร่')">
+                            <i class="fa-solid fa-calendar-days"></i>วันลาคงเหลือ
+                        </div>
+                        <div class="feature-item" onclick="quickAsk('เมื่อวานเข้างานกี่โมง')">
+                            <i class="fa-solid fa-clock"></i>เวลาเข้างาน
+                        </div>
+                        <div class="feature-item" onclick="quickAsk('สถานะเคลมค่ารักษา')">
+                            <i class="fa-solid fa-hospital"></i>สถานะเคลม
+                        </div>
+                        <div class="feature-item" onclick="quickAsk('ข้อมูลส่วนตัวของฉัน')">
+                            <i class="fa-solid fa-user-circle"></i>ข้อมูลของฉัน
+                        </div>
+                        <div class="feature-item" onclick="quickAsk('เพื่อนร่วมงานในแผนก')">
+                            <i class="fa-solid fa-users"></i>เพื่อนร่วมแผนก
+                        </div>
+                        <div class="feature-item" onclick="quickAsk('ลาป่วยต้องยื่นเอกสารอะไร')">
+                            <i class="fa-solid fa-file-medical"></i>วิธีลางาน
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="quick-actions">
+            <button class="quick-btn" onclick="quickAsk('วันลาเหลือเท่าไหร่')">
+                <i class="fa-solid fa-calendar-days"></i> วันลาคงเหลือ
+            </button>
+            <button class="quick-btn" onclick="quickAsk('เวลาเข้างานล่าสุด')">
+                <i class="fa-solid fa-clock"></i> เวลาเข้างาน
+            </button>
+            <button class="quick-btn" onclick="quickAsk('สถานะเคลมค่ารักษา')">
+                <i class="fa-solid fa-hospital"></i> สถานะเคลม
+            </button>
+            <button class="quick-btn" onclick="quickAsk('ข้อมูลส่วนตัวของฉัน')">
+                <i class="fa-solid fa-user"></i> โปรไฟล์
+            </button>
+            <button class="quick-btn" onclick="quickAsk('เพื่อนร่วมงานในแผนก')">
+                <i class="fa-solid fa-users"></i> เพื่อนร่วมแผนก
+            </button>
+            <button class="quick-btn chart-btn" onclick="requestMedicalChartFromQuickButton()">
+                 <i class="fa-solid fa-chart-pie"></i> กราฟค่ารักษา
+            </button>
+            <button class="quick-btn chart-btn" onclick="requestAttendanceChartFromQuickButton()">
+                 <i class="fa-solid fa-user-clock"></i> กราฟเวลาเข้าออกงาน
+            </button>
+        </div>
+
+        <div class="chat-input-wrap">
+            <div class="input-box">
+                <textarea id="messageInput"
+                          placeholder="พิมพ์คำถาม... (Enter ส่ง | Shift+Enter ขึ้นบรรทัด)"
+                          rows="1"></textarea>
+                <button class="btn-send voice-mode" id="sendBtn" title="ไมโครโฟน">
+                    <i class="fa-solid fa-microphone" id="sendBtnIcon"></i>
+                </button>
+            </div>
+            <div class="voice-panel" id="voicePanel">
+                <button type="button" class="voice-cancel" id="voiceCancelBtn" title="ปิด">×</button>
+                <div class="voice-panel-text" id="voicePanelText">แตะเพื่อบันทึกข้อความเสียง</div>
+                <div class="voice-dot-ring" id="voiceHoldBtn" role="button" tabindex="0" title="กดค้างเพื่อบันทึก">
+                    <div class="voice-dot"></div>
+                </div>
+                <div class="voice-wave-bars" id="voiceWaveBars">
+                    <div class="voice-bar"></div>
+                    <div class="voice-bar"></div>
+                    <div class="voice-bar"></div>
+                    <div class="voice-bar"></div>
+                    <div class="voice-bar"></div>
+                </div>
+                <div class="voice-status-label" id="voiceStatusLabel">● กำลังบันทึก...</div>
+            </div>
+            <div class="input-hint">
+                <i class="fa-solid fa-shield-halved me-1"></i>
+                ข้อมูลของคุณได้รับการปกป้องอย่างปลอดภัย
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="toast-box" id="toastBox"></div>
+
+<script>
+    window.chatConfig = {
+        hubUrl:       '@Url.Content("~/chathub")',
+        apiBaseUrl:   '@Url.Content("~/api/chat")',
+        employeeId:   '@Model.EmployeeId',
+        employeeName: '@Model.EmployeeName',
+        sessionId:    '@Model.CurrentSessionId',
+        sessionsUrl:  '/api/chat/sessions'
+    };
+</script>
+
+<script src="~/js/microsoft-signalr9.0.6.min.js" asp-append-version="true"></script>
+<script src="~/js/chat.js" asp-append-version="true"></script>
+<script src="~/js/chart.umd.min.js" asp-append-version="true"></script>
+<script src="~/js/medical-chart.js" asp-append-version="true"></script>
+<script src="~/js/attendance-chart.js" asp-append-version="true"></script>
+<script src="~/js/training-chart.js" asp-append-version="true"></script>
+</body>
+</html>
+
+
